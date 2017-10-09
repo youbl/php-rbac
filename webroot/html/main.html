@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="UTF-8">
+        <title>RBAC权限管理系统</title>
+        <script type="text/javascript" src="https://ascdn.bdstatic.com/fz_act/js/jq_125bece.js"></script>
+        <script type="text/javascript" src="https://ascdn.bdstatic.com/fz_act/js/rowColor_666490a.js"></script>
+        <link rel="stylesheet" href="../css/default.css">
+        <script type="text/javascript">
+        $(document).ready(function(e){
+            if ( top.location !== self.location ) {
+                top.location = self.location;
+                return;
+            }
+            
+            var $sideNav = $('.side-nav');	
+            var opening = true;
+            var $btnSwitch = $('.btn-switch',$sideNav);
+            var $main = $('.main');
+            var winHeight = 0;
+            var winHeightDiff = 90;
+            var pining = true;
+            function getHeight(){
+                if (window.innerHeight){
+                    winHeight = window.innerHeight-winHeightDiff;
+                }
+                else if ((document.body) && (document.body.clientHeight)){
+                    winHeight = document.body.clientHeight-winHeightDiff;
+                }
+                $sideNav.css('height',winHeight);
+                $main.css('height',winHeight);					
+            }
+            $(window).load(function(){
+                getHeight();
+            });
+            $(window).resize(function(){
+                getHeight();
+            });
+            
+            function closeNav (){
+                if(opening){
+                    //$btnSwitch.addClass('btn-switch-hide');
+                    $sideNav.animate({'width':'0','padding-right':'30px'},'fast',function(){
+                            opening = false;
+                    });
+                    $main.animate({'margin-left':'30px'},'fast');
+                    $btnSwitch.animate({'right':0+'px'});
+                }
+            }
+            function openNav (){
+                if(!opening){
+                    //$btnSwitch.removeClass('btn-switch-hide');
+                    $sideNav.animate({'width':'200px','padding-right':'0'},'fast',function(){
+                        opening = true;
+                    });
+                    $main.animate({'margin-left':'200px'},'fast');
+                    $btnSwitch.animate({'right':20+'px'});
+                }
+            }
+            $sideNav.each(function(){
+                $sideNav.mouseenter(function(e){
+                    if(!pining){
+                        openNav();
+                    }
+                });
+                $sideNav.mouseleave(function(e){
+                    if(!pining){
+                        closeNav();
+                    }
+                });
+            });
+            $btnSwitch.click(function(){
+                if(!pining){
+                    $btnSwitch.addClass('btn-switch-on');
+                    pining = true;
+                }
+                else{
+                    $btnSwitch.removeClass('btn-switch-on');
+                    pining = false;
+                }
+            });
+        });
+        </script>
+    </head>
+    <body>
+        <div class="mod-topbar">
+            <iframe frameborder="0" scrolling="no"></iframe>
+        </div>
+        <div class="wrap">
+            <div class="side-nav">
+                <span class="btn-switch btn-switch-on"></span>
+                <iframe src="menu.html" frameborder="0" scrolling="auto"></iframe>
+            </div>
+            <div class="main">
+                <iframe name="right" frameborder="0" scrolling="auto"></iframe>
+            </div>
+        </div>
+    </body>
+</html>

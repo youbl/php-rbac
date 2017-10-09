@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="UTF-8">
+        <title>RBAC用户列表</title>
+        <script type="text/javascript" src="https://ascdn.bdstatic.com/fz_act/js/jq_125bece.js"></script>
+        <link rel="stylesheet" href="https://ascdn.bdstatic.com/fz_act/js/jquery-ui-min.css">
+        <script type="text/javascript" src="https://ascdn.bdstatic.com/fz_act/js/jquery-ui-min.js"></script>
+        <script type="text/javascript" src="https://ascdn.bdstatic.com/fz_act/js/rowColor_666490a.js"></script>
+        
+        <link rel="stylesheet" type="text/css" href="jquery.multiselect.css" />
+        <script type="text/javascript" src="jquery.multiselect.min.js"></script>
+
+        <link rel="stylesheet" href="../../css/common.css">
+        <script type="text/javascript" src="../../js/common.js"></script>
+        <script type="text/javascript" src="../../js/admin/users.js"></script>
+    </head>
+    <body>
+        <div>
+            <div class="main">
+                <div class="title">用户列表</div>
+                <div class="buttons">
+                    <button id="btnNew" type="button" onclick="editUser();">新建用户</button>
+                </div>
+                <div class="table">
+                    <table id="tabData" border="1" cellspacing="0" cellpadding="0">
+                        <tr style="background:#add9c0;">
+                            <td style="width:60px;">ID</td>
+                            <td style="width:100px;">account</td>
+                            <td style="width:100px;">用户名</td>
+                            <td style="width:50px;">状态</td>
+                            <td style="width:150px;">用户组</td>
+                            <td style="width:150px;">角色</td>
+                            <td style="width:150px;">入库时间</td>
+                            <td style="width:200px;">操作</td>
+                        </tr>
+                        <tr id="trNoData" style="display: none;"><td colspan="8">未找到数据</td></tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <script type="text/template" id="tplRow">
+            <tr>
+                <td>{u_id}</td>
+                <td>{account}</td>
+                <td>{u_name}</td>
+                <td data='{u_status}'>{status}</td>
+                <td>{groups}</td>
+                <td>{roles}</td>
+                <td>{add_time}</td>
+                <td>
+                    <a href="userdetail.html?id={u_id}" target="_blank">[权限]</a>
+                    <a href="#0" onclick="editUser(this)" >[编辑]</a>
+                    <a href="#0" onclick="disableUser(this)">[{btnTxt}]</a><br>
+                    <a href="#0" onclick="editRoleOrGroup(this)" >[编辑角色]</a>
+                    <a href="#0" onclick="editRoleOrGroup(this)" >[编辑分组]</a>
+                </td>
+            </tr>
+        </script>
+        <div id="userDialog" style="display:none">
+        </div>
+        <!-- 用户信息编辑模板 -->
+        <script type="text/template" id="tplUserInfo">
+            <div id="divId" class="clear">
+                <div class="diagtitle">用户id：</div>
+                <div class="diagctl"><input type="text" id="txtUid" disabled="disabled"></div>
+            </div>
+            <div class="clear">
+                <div class="diagtitle"><span class="must">*</span>登录账号：</div>
+                <div class="diagctl"><input type="text" id="txtAccount" maxlength="30"></div>
+            </div>
+            <div class="clear">
+                <div class="diagtitle"><span class="must">*</span>用户名：</div>
+                <div class="diagctl"><input type="text" id="txtName" maxlength="30"></div>
+            </div>
+            <div class="clear">
+                <div class="diagtitle"><span class="must">*</span>用户状态：</div>
+                <div class="diagctl" title="至少勾选一个">
+                    <label><input type="radio" name="chkstatus" value="0" style="width:15px;" checked="checked">有效</label>
+                    <label><input type="radio" name="chkstatus" value="1" style="width:15px;">停用</label>
+                </div>
+            </div>
+        </script>
+        <!-- 用户所属角色或分组编辑模板 -->
+        <script type="text/template" id="tplUserAtt">
+            <input type="hidden" id="hidType">
+            <div id="divId" class="clear">
+                <div class="diagtitle">用户id：</div>
+                <div class="diagctl"><input type="text" id="txtUid" disabled="disabled"></div>
+            </div>
+            <div class="clear" style="display:none;">
+                <div class="diagtitle"><span class="must">*</span>用户组：</div>
+                <div class="diagctl">
+                    <select id="lstGroups" multiple="multiple" style="width:300px">
+                        <option value="option1"> 1</option>
+                        <option value="option2"> 2</option>
+                        <option value="option3"> 3</option>
+                        <option value="option4"> 4</option>
+                    </select>
+                </div>
+            </div>
+            <div class="clear" style="display:none;">
+                <div class="diagtitle"><span class="must">*</span>所属角色：</div>
+                <div class="diagctl">
+                    <select id="lstRoles" multiple="multiple" style="width:300px">
+                        <option value="option1">Option 1</option>
+                        <option value="option2">Option 2</option>
+                        <option value="option3">Option 3</option>
+                        <option value="option4">Option 4</option>
+                        <option value="option5">Option 5</option>
+                        <option value="option6">Option 6</option>
+                        <option value="option7">Option 7</option>
+                    </select>
+                </div>
+            </div>
+        </script>
+    </body>
+</html>
