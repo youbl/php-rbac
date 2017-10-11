@@ -6,6 +6,7 @@ var isNeting = false;
 // 所有的用户和用户组数据，用于给角色绑定设置使用
 var arrUsers = [];
 var arrGroups = [];
+var arrPerms = [];
 $(document).ready(function () {
     loadLists();
 
@@ -23,38 +24,16 @@ $(document).ready(function () {
  */
 function loadUsersAndGroups() {
     var url = '../../admin/users?noatt=1';
-    $.ajax({
-        type: 'GET',
-        url: url,
-        cache: false,
-        dataType: 'json',
-        success: function (response) {
-            if (response.code !== 200) {
-                alert(response.code + (response.message ? '-' + response.message : ''));
-                return;
-            }
-            if (!response.result || response.result.length === 0) {
-                return;
-            }
-            window.arrUsers = response.result;
-        }
+    ajaxLoadData(url, function (ret) {
+        window.arrUsers = ret;
     });
     url = '../../admin/groups?noatt=1';
-    $.ajax({
-        type: 'GET',
-        url: url,
-        cache: false,
-        dataType: 'json',
-        success: function (response) {
-            if (response.code !== 200) {
-                alert(response.code + (response.message ? '-' + response.message : ''));
-                return;
-            }
-            if (!response.result || response.result.length === 0) {
-                return;
-            }
-            window.arrGroups = response.result;
-        }
+    ajaxLoadData(url, function (ret) {
+        window.arrGroups = ret;
+    });
+    url = '../../admin/permissions?noatt=1';
+    ajaxLoadData(url, function (ret) {
+        window.arrPerms = ret;
     });
 }
 
@@ -105,7 +84,7 @@ function disableItem(obj) {
     var para = {};
     para.id = $.trim(tr.find('td:eq(0)').text());
     var status = tr.find('td:eq(3)').attr('data');
-    para.status = status ? 0 : 1;
+    para.status = status === '1' ? 0 : 1;
     $.post(apiurl + '?flg=disable', para, function (response) {
         if (response.code !== 200) {
             alert('操作失败 ' + (response.message ? response.message : ''));
@@ -132,6 +111,7 @@ function editItem(obj) {
     if (!obj) {
         // 新增
         edittxt = '新增角色';
+        $('#divId').hide();
         $('#txtUid').val('');
     } else {
         // 编辑，从当前行获取要编辑的数据
@@ -172,9 +152,9 @@ function saveitem() {
             return;
         }
         if (response.result) {
+            loadLists();
             alert('操作成功:' + response.result);
             window.hideDialog(dialogCtlId);
-            loadLists();
         } else {
             alert('失败:' + (response.result ? response.result : '其它错误'));
         }
@@ -209,14 +189,17 @@ function getParams() {
  * @param {type} obj 点击对象
  */
 function editUserOrGroup(obj) {
-    var isUser = $(obj).text().indexOf('用户') >= 0;
+    var tmpTxt = $(obj).text();
+    var isUser = tmpTxt.indexOf('用户') >= 0;
+    var isGroup = tmpTxt.indexOf('分组') >= 0;
+    var isRole = !isUser && !isGroup;
 
     $(dialogCtlId).html($('#tplItemAtt').html());
-    $('#hidType').val(isUser ? '1' : '0');
 
     var tr = $(obj).parents('tr:eq(0)');
     $('#txtUid').val($.trim(tr.find('td:eq(0)').text()));
     if (isUser) {
+        $('#hidType').val('1');
         var target = $('#lstUsers');
         var data = window.arrUsers;
         var edittxt = '所属用户编辑...';
@@ -224,7 +207,8 @@ function editUserOrGroup(obj) {
         var attName = 'u_name';
         var attStatus = 'u_status';
         var oldVal = ' ' + $.trim(tr.find('td:eq(4)').text());
-    } else {
+    } else if (isGroup) {
+        $('#hidType').val('0');
         var target = $('#lstGroups');
         var data = window.arrGroups;
         var edittxt = '所属用户组编辑...';
@@ -232,6 +216,15 @@ function editUserOrGroup(obj) {
         var attName = 'g_name';
         var attStatus = 'g_status';
         var oldVal = ' ' + $.trim(tr.find('td:eq(5)').text());
+    } else {
+        $('#hidType').val('2');
+        var target = $('#lstProms');
+        var data = window.arrPerms;
+        var edittxt = '拥有权限编辑...';
+        var attId = 'p_id';
+        var attName = 'p_desc';
+        var attStatus = 'p_status';
+        var oldVal = ' ' + $.trim(tr.find('td:eq(6)').text());
     }
     // 列表的2级父对象显示
     target.parent().parent().show();
@@ -243,7 +236,16 @@ function editUserOrGroup(obj) {
             continue; // 禁用的不允许
         }
         var selected = oldVal.indexOf(' ' + item[attId] + ':') >= 0 ? 'selected' : '';
-        target.append('<option value="' + item[attId] + '" ' + selected + '>' + item[attId] + ':' + item[attName] + '</option>');
+        var txt = item[attId] + ':' + item[attName];
+        var val = item[attId];
+
+        // 角色特殊处理,用于复选父框，避免权限无法显示
+        if (isRole && item['p_parentid'] !== 0) {
+            val = item['p_parentid'] + '-' + val;
+            txt = item['p_parentid'] + '-' + txt;
+        }
+        target.append('<option value="' + val + '" '
+                + selected + '>' + txt + '</option>');
     }
 
     var selectOption = {
@@ -255,24 +257,72 @@ function editUserOrGroup(obj) {
         checkAllText: '全选',
         uncheckAllText: '取消选择',
     };
+    if (isRole) {
+        // 设置multiselect的点击事件：https://github.com/ehynds/jquery-ui-multiselect-widget/wiki/Events
+        selectOption.click = checkParent;
+    }
     target.multiselect(selectOption);
 
     $(dialogCtlId).dialog('option', 'title', edittxt);
     window.showDialog(dialogCtlId);
 }
 
+function checkParent(event, ui) {
+    var lst = $('#lstProms');
+    var arrOld = lst.val();
+    if (!arrOld) {
+        arrOld = [];
+    }
+
+    var val = ui.value;
+    var arr = val.split('-');
+    var isParent = arr.length !== 2;// 是否一级权限
+    var pid = arr[0];
+    if (!ui.checked) {
+        if (isParent) {
+            // 关闭父权限时，移除全部子权限
+            for (var i = arrOld.length - 1; i >= 0; i--) {
+                if (arrOld[i] === pid || arrOld[i].indexOf(pid + '-') === 0) {
+                    arrOld.splice(i, 1);
+                }
+            }
+            lst.val(arrOld).multiselect('refresh');
+        }
+        return;
+    }
+
+    // 选择子权限的同时，选中父权限
+    if ($.inArray(pid, arrOld) >= 0) {
+        // 已经包含父权限了
+        return;
+    }
+    arrOld.push(pid);
+    arrOld.push(ui.value);
+    lst.val(arrOld).multiselect('refresh');
+}
+
 /**
  * 保存角色所属用户或分组
- * @param {type} obj 点击对象
  */
 function saveUserOrGroup() {
     var isUser = $('#hidType').val() === '1';
-    var target = isUser ? $('#lstUsers') : $('#lstGroups');
+    var isGroup = $('#hidType').val() === '0';
+    var target = isUser ? $('#lstUsers') : (isGroup ? $('#lstGroups') : $('#lstProms'));
+
     var para = {};
     para.id = $('#txtUid').val();
     var selectOptions = target.val();
     if (selectOptions) {
         para.list = selectOptions;
+        if (!isUser && !isGroup) {
+            // 角色编辑要移除value里的父id
+            for (var i = para.list.length - 1; i >= 0; i--) {
+                var idx = para.list[i].indexOf('-');
+                if (idx > 0) {
+                    para.list[i] = para.list[i].substring(idx + 1);
+                }
+            }
+        }
     } else {
         para.list = [];
     }
@@ -285,7 +335,7 @@ function saveUserOrGroup() {
         return;
     }
     isNeting = true;
-    var flg = isUser ? 'roleuser' : 'rolegroup';
+    var flg = isUser ? 'roleuser' : (isGroup ? 'rolegroup' : 'roleperm');
     $.post(apiurl + '?flg=' + flg, para, function (response) {
         isNeting = false;
         if (response.code !== 200) {
@@ -293,9 +343,9 @@ function saveUserOrGroup() {
             return;
         }
         if (response.result) {
+            loadLists();
             alert('操作成功:' + response.result);
             window.hideDialog(dialogCtlId);
-            loadLists();
         } else {
             alert('失败:其它错误');
         }

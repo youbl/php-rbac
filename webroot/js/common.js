@@ -90,6 +90,9 @@ function render(template, data) {
  * @return {String}
  */
 function toStr(obj) {
+    if (obj === null || obj === undefined) {
+        return '';
+    }
     if (obj instanceof Object) {
         var ret = '';
         var idx = 0;
@@ -168,4 +171,42 @@ function trColorChg(id) {
             });
         });
     }, 500);
+}
+
+/**
+ * 通过ajax加载数据
+ * @param {type} url
+ * @param {type} callback
+ * @returns {undefined}
+ */
+function ajaxLoadResponse(url, callback) {
+    $.ajax({
+        type: 'GET',
+        url: url,
+        cache: false,
+        dataType: 'json',
+        success: function (response) {
+            callback(response);
+        }
+    });
+}
+
+
+/**
+ * 通过ajax加载数据
+ * @param {type} url
+ * @param {type} callback
+ * @returns {undefined}
+ */
+function ajaxLoadData(url, callback) {
+    ajaxLoadResponse(url, function (response) {
+        if (response.code !== 200) {
+            alert(response.code + (response.message ? '-' + response.message : ''));
+            return;
+        }
+        if (!response.result || response.result.length === 0) {
+            return;
+        }
+        callback(response.result);
+    });
 }

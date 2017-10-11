@@ -1,11 +1,11 @@
 
-var apiurl = '../../admin/users';
+var apiurl = '../../admin/groups';
 var dialogCtlId = '#editDialog';
 // 避免网络导致，导致用户多次点击多次请求数据
 var isNeting = false;
-// 所有的角色和用户组数据，用于给用户绑定设置使用
+// 所有的用户和角色数据，用于给用户组绑定设置使用
+var arrUsers = [];
 var arrRoles = [];
-var arrGroups = [];
 $(document).ready(function () {
     loadLists();
 
@@ -15,25 +15,25 @@ $(document).ready(function () {
     // 解决multiselect被浮层遮挡的bug
     $('.ui-multiselect-menu').css('z-index', 1000);
 
-    loadRolesAndGroups();
+    loadUsersAndGroups();
 });
 
 /**
- * 加载所有的角色列表和用户组列表，供用户绑定
+ * 加载所有的角色列表和用户列表，供用户绑定
  */
-function loadRolesAndGroups() {
-    var url = '../../admin/roles?noatt=1';
+function loadUsersAndGroups() {
+    var url = '../../admin/users?noatt=1';
+    ajaxLoadData(url, function (ret) {
+        window.arrUsers = ret;
+    });
+    url = '../../admin/roles?noatt=1';
     ajaxLoadData(url, function (ret) {
         window.arrRoles = ret;
-    });
-    url = '../../admin/groups?noatt=1';
-    ajaxLoadData(url, function (ret) {
-        window.arrGroups = ret;
     });
 }
 
 /**
- * 获取用户列表
+ * 获取列表
  */
 function loadLists() {
     var tbId = '#tabData';
@@ -65,15 +65,15 @@ function loadLists() {
 
 
 /**
- * 禁用指定用户
+ * 禁用指定用户组
  * @param {jquery} obj 点击对象
  * @return {undefined}
  */
 function disableItem(obj) {
     var tr = $(obj).parents('tr:eq(0)');
-    var account = $.trim(tr.find('td:eq(1)').text());
+    var name = $.trim(tr.find('td:eq(1)').text());
     var btnTxt = $(obj).text().replace(/[\[\]]/g, '');
-    if (!confirm('确认要' + btnTxt + '：' + account + '吗？')) {
+    if (!confirm('确认要' + btnTxt + '：' + name + '吗？')) {
         return;
     }
     var para = {};
@@ -95,7 +95,7 @@ function disableItem(obj) {
 }
 
 /**
- * 新增或修改用户
+ * 新增或修改
  * @param {jquery} obj 点击对象，为空表示新增，不为空表示编辑
  * @return {undefined}
  */
@@ -105,16 +105,16 @@ function editItem(obj) {
     var edittxt;
     if (!obj) {
         // 新增
-        edittxt = '新增用户';
+        edittxt = '新增用户组';
         $('#divId').hide();
         $('#txtUid').val('');
     } else {
         // 编辑，从当前行获取要编辑的数据
-        edittxt = '编辑用户';
+        edittxt = '编辑用户组';
         var tr = $(obj).parents('tr:eq(0)');
         $('#txtUid').val($.trim(tr.find('td:eq(0)').text()));
-        $('#txtAccount').val($.trim(tr.find('td:eq(1)').text()));
-        $('#txtName').val($.trim(tr.find('td:eq(2)').text()));
+        $('#txtName').val($.trim(tr.find('td:eq(1)').text()));
+        $('#txtDesc').val($.trim(tr.find('td:eq(2)').text()));
         var status = tr.find('td:eq(3)').attr('data');
         $('input[name="chkstatus"][value="' + status + '"]').prop('checked', 'checked');
     }
@@ -129,7 +129,7 @@ function editItem(obj) {
  */
 function saveitem() {
     if ($('#hidType').length > 0) {
-        return saveRoleOrGroup();
+        return saveUserOrGroup();
     }
     var para = getParams();
     if (!para) {
@@ -163,12 +163,6 @@ function saveitem() {
 function getParams() {
     var para = {};
     para.id = $('#txtUid').val();
-    para.account = $.trim($('#txtAccount').val());
-    if (para.account.length <= 0) {
-        alert('账号不能为空');
-        return false;
-    }
-
     para.name = $.trim($('#txtName').val());
     if (para.name.length <= 0) {
         alert('名称不能为空');
@@ -185,18 +179,26 @@ function getParams() {
 }
 
 /**
- * 编辑用户所属角色或分组
+ * 编辑用户组所属角色或下属用户
  * @param {type} obj 点击对象
  */
-function editRoleOrGroup(obj) {
-    var isRole = $(obj).text().indexOf('角色') >= 0;
+function editUserOrRole(obj) {
+    var isUser = $(obj).text().indexOf('用户') >= 0;
 
     $(dialogCtlId).html($('#tplItemAtt').html());
-    $('#hidType').val(isRole ? '1' : '0');
+    $('#hidType').val(isUser ? '1' : '0');
 
     var tr = $(obj).parents('tr:eq(0)');
     $('#txtUid').val($.trim(tr.find('td:eq(0)').text()));
-    if (isRole) {
+    if (isUser) {
+        var target = $('#lstUsers');
+        var data = window.arrUsers;
+        var edittxt = '下属用户编辑...';
+        var attId = 'u_id';
+        var attName = 'u_name';
+        var attStatus = 'u_status';
+        var oldVal = ' ' + $.trim(tr.find('td:eq(4)').text());
+    } else {
         var target = $('#lstRoles');
         var data = window.arrRoles;
         var edittxt = '所属角色编辑...';
@@ -204,14 +206,6 @@ function editRoleOrGroup(obj) {
         var attName = 'r_name';
         var attStatus = 'r_status';
         var oldVal = ' ' + $.trim(tr.find('td:eq(5)').text());
-    } else {
-        var target = $('#lstGroups');
-        var data = window.arrGroups;
-        var edittxt = '所属用户组编辑...';
-        var attId = 'g_id';
-        var attName = 'g_name';
-        var attStatus = 'g_status';
-        var oldVal = ' ' + $.trim(tr.find('td:eq(4)').text());
     }
     // 列表的2级父对象显示
     target.parent().parent().show();
@@ -242,12 +236,12 @@ function editRoleOrGroup(obj) {
 }
 
 /**
- * 保存用户所属角色或分组
+ * 保存角色所属用户或分组
  * @param {type} obj 点击对象
  */
-function saveRoleOrGroup() {
-    var isRole = $('#hidType').val() === '1';
-    var target = isRole ? $('#lstRoles') : $('#lstGroups');
+function saveUserOrGroup() {
+    var isUser = $('#hidType').val() === '1';
+    var target = isUser ? $('#lstUsers') : $('#lstRoles');
     var para = {};
     para.id = $('#txtUid').val();
     var selectOptions = target.val();
@@ -265,7 +259,7 @@ function saveRoleOrGroup() {
         return;
     }
     isNeting = true;
-    var flg = isRole ? 'role' : 'group';
+    var flg = isUser ? 'groupuser' : 'grouprole';
     $.post(apiurl + '?flg=' + flg, para, function (response) {
         isNeting = false;
         if (response.code !== 200) {

@@ -20,12 +20,33 @@ class Controller_Admin extends Controller_Base {
      * @param type $account
      */
     public function permissionsAction($app = '', $account = '') {
-        $modelUser = new Model_Users();
-        $users = $modelUser->getAllRights($account, $app);
-        if (empty($users)) {
-            jsonhelper::jsonError($account . ' has no permission found.');
-        } else {
-            jsonhelper::jsonOutput(true, $users);
+        if (!empty($account)) {
+            $modelUser = new Model_Users();
+            $users = $modelUser->getAllRights($account, $app);
+            if (empty($users)) {
+                jsonhelper::jsonError($account . ' has no permission found.');
+            } else {
+                jsonhelper::jsonOutput(true, $users);
+            }
+        }
+
+        if ($this->isGet()) {
+            // 返回列表数据
+            return $this->showPerms($app);
+        }
+
+        if ($this->isPost()) {
+            $flg = $this->getQuery('flg');
+            switch ($flg) {
+                case 'edit':
+                    return $this->addOrUpdatePerm();
+                case 'permrole':
+                    return $this->mapEdit($flg);
+                case 'disable':
+                    return $this->disabledPerm();
+                default :
+                    return jsonhelper::jsonOutput(false, 'not valid operation');
+            }
         }
     }
 
@@ -36,8 +57,14 @@ class Controller_Admin extends Controller_Base {
      */
     public function usersAction($app = '') {
         if ($this->isGet()) {
-            // 返回列表数据
-            return $this->showUsers($app);
+            $userid = $this->getQueryInt('uid');
+            if (empty($userid)) {
+                // 返回列表数据
+                return $this->showUsers($app);
+            }
+
+            // 返回指定用户的权限列表数据
+            return $this->showUserPerms($app, $userid);
         }
 
         if ($this->isPost()) {
@@ -74,6 +101,7 @@ class Controller_Admin extends Controller_Base {
                     return $this->addOrUpdateRole();
                 case 'roleuser':
                 case 'rolegroup':
+                case 'roleperm':
                     return $this->mapEdit($flg);
                 case 'disable':
                     return $this->disabledRole();
@@ -84,14 +112,20 @@ class Controller_Admin extends Controller_Base {
     }
 
     /**
-     * 角色相关操作统一入口
+     * 用户组相关操作统一入口
      * @param type $app
      * @return type
      */
     public function groupsAction($app = '') {
         if ($this->isGet()) {
-            // 返回列表数据
-            return $this->showGroups($app);
+            $groupid = $this->getQueryInt('gid');
+            if (empty($groupid)) {
+                // 返回列表数据
+                return $this->showGroups($app);
+            }
+
+            // 返回指定分组的权限列表数据
+            return $this->showGroupPerms($app, $groupid);
         }
 
         if ($this->isPost()) {
@@ -120,37 +154,43 @@ class Controller_Admin extends Controller_Base {
      */
     private function showUsers($app = '') {
         // $app = $this->getQuery('app');
-        $modelUser = new Model_Users();
-        $users = $modelUser->getUsers($app);
-        if (empty($users)) {
-            return jsonhelper::jsonOutput(true, array());
-        }
 
         $noAtt = $this->getQuery('noatt');
-        foreach ($users as &$user) {
-            $isStatusOk = $user['u_status'] === 0;
-            $user['status'] = $isStatusOk ? '启用' : '<span class="must">禁用</span>';
-            $user['btnTxt'] = $isStatusOk ? '禁用' : '启用';
-            $user['add_time'] = date('Y-m-d H:i:s', $user['add_time']);
+        $modelUser = new Model_Users();
+        // 用于不需要填充属性的请求
+        if (!empty($noAtt)) {
+            $datas = $modelUser->getUsers($app);
+            return jsonhelper::jsonOutput(true, $datas);
+        }
 
-            // 用于不需要填充属性的请求
-            if (!empty($noAtt)) {
-                continue;
+        // 一次性取出数据和映射，避免多次查库，导致响应慢
+        $datas = $modelUser->getUsersWithMap($app);
+        if (empty($datas)) {
+            return jsonhelper::jsonOutput(true, array());
+        }
+        $ret = array();
+        foreach ($datas as $item) {
+            $id = $item['u_id'];
+            if (!isset($ret[$id])) {
+                $ret[$id] = $item;
+                $isStatusOk = $item['u_status'] === 0;
+                $ret[$id]['status'] = $isStatusOk ? '启用' : '<span class="must">禁用</span>';
+                $ret[$id]['btnTxt'] = $isStatusOk ? '禁用' : '启用';
+                $ret[$id]['add_time'] = date('Y-m-d H:i:s', $item['add_time']);
+
+                $ret[$id]['roles'] = array();
+                $ret[$id]['groups'] = array();
             }
-
-            $user['roles'] = array();
-            $user['groups'] = array();
-            $arrData = $modelUser->getRolesAndGroupsByUid($user['u_id'], $app); // 用户所属角色和用户组列表
-            foreach ($arrData as $item) {
-                if ($item['nametype'] === 0) {
-                    $user['roles'][] = $item['name'];
-                } else {
-                    $user['groups'][] = $item['name'];
-                }
+            if (!empty($item['rname'])) {
+                $ret[$id]['roles'][$item['rname']] = $item['rname'];
+            }
+            if (!empty($item['gname'])) {
+                $ret[$id]['groups'][$item['gname']] = $item['gname'];
             }
         }
         unset($user);
-        return jsonhelper::jsonOutput(true, $users);
+        unset($datas);
+        return jsonhelper::jsonOutput(true, array_values($ret));
     }
 
     /**
@@ -191,6 +231,21 @@ class Controller_Admin extends Controller_Base {
         jsonhelper::jsonOutput(true, $ret);
     }
 
+    /**
+     * 显示指定用户的权限清单
+     * @param type $app
+     * @param type $userid
+     */
+    private function showUserPerms($app, $userid) {
+        $model = new Model_Users();
+        $ret = $model->getPermsByUid($userid, $app);
+        $itemInfo = $model->getById($app, $userid);
+        if (!empty($itemInfo)) {
+            $itemInfo = $itemInfo[0];
+        }
+        jsonhelper::jsonOutput(true, $ret, $itemInfo);
+    }
+
     // </editor-fold>
     //
     // <editor-fold defaultstate="collapsed" desc="用户组 相关操作的私有方法">
@@ -200,38 +255,42 @@ class Controller_Admin extends Controller_Base {
      * @return type
      */
     private function showGroups($app = '') {
-        // $app = $this->getQuery('app');
+
+        $noAtt = $this->getQuery('noatt');
         $modelGroup = new Model_Groups();
-        $datas = $modelGroup->getGroups($app);
+        // 用于不需要填充属性的请求
+        if (!empty($noAtt)) {
+            $datas = $modelGroup->getGroups($app);
+            return jsonhelper::jsonOutput(true, $datas);
+        }
+        // 一次性取出数据和映射，避免多次查库，导致响应慢
+        $datas = $modelGroup->getGroupsWithMap($app);
         if (empty($datas)) {
             return jsonhelper::jsonOutput(true, array());
         }
+        $ret = array();
+        foreach ($datas as $item) {
+            $id = $item['g_id'];
+            if (!isset($ret[$id])) {
+                $ret[$id] = $item;
+                $isStatusOk = $item['g_status'] === 0;
+                $ret[$id]['status'] = $isStatusOk ? '启用' : '<span class="must">禁用</span>';
+                $ret[$id]['btnTxt'] = $isStatusOk ? '禁用' : '启用';
+                $ret[$id]['add_time'] = date('Y-m-d H:i:s', $item['add_time']);
 
-        $noAtt = $this->getQuery('noatt');
-        foreach ($datas as &$item) {
-            $isStatusOk = $item['g_status'] === 0;
-            $item['status'] = $isStatusOk ? '启用' : '<span class="must">禁用</span>';
-            $item['btnTxt'] = $isStatusOk ? '禁用' : '启用';
-            $item['add_time'] = date('Y-m-d H:i:s', $item['add_time']);
-
-            // 用于不需要填充属性的请求
-            if (!empty($noAtt)) {
-                continue;
+                $ret[$id]['users'] = array();
+                $ret[$id]['roles'] = array();
             }
-
-            $item['users'] = array();
-            $item['roles'] = array();
-            $arrData = $modelGroup->getUsersAndRolesByGid($item['g_id'], $app); // 角色下用户和用户组列表
-            foreach ($arrData as $att) {
-                if ($att['nametype'] === 0) {
-                    $item['users'][] = $att['name'];
-                } else {
-                    $item['roles'][] = $att['name'];
-                }
+            if (!empty($item['uname'])) {
+                $ret[$id]['users'][$item['uname']] = $item['uname'];
+            }
+            if (!empty($item['rname'])) {
+                $ret[$id]['roles'][$item['rname']] = $item['rname'];
             }
         }
         unset($item);
-        return jsonhelper::jsonOutput(true, $datas);
+        unset($datas);
+        return jsonhelper::jsonOutput(true, array_values($ret));
     }
 
     /**
@@ -263,12 +322,27 @@ class Controller_Admin extends Controller_Base {
         $data['g_status'] = $this->getPostInt('status');
         $data['lastip'] = httphelper::GetClientIP();
         $model = new Model_Groups();
-        if ($data['r_id'] === 0) {
+        if ($data['g_id'] === 0) {
             $ret = $model->addGroup($data);
         } else {
             $ret = $model->updateGroup($data);
         }
         jsonhelper::jsonOutput(true, $ret);
+    }
+
+    /**
+     * 显示指定用户组的权限清单
+     * @param type $app
+     * @param type $groupid
+     */
+    private function showGroupPerms($app, $groupid) {
+        $model = new Model_Groups();
+        $ret = $model->getPermsByGroup($groupid, $app);
+        $groupInfo = $model->getGroupById($app, $groupid);
+        if (!empty($groupInfo)) {
+            $groupInfo = $groupInfo[0];
+        }
+        jsonhelper::jsonOutput(true, $ret, $groupInfo);
     }
 
     // </editor-fold>
@@ -281,37 +355,47 @@ class Controller_Admin extends Controller_Base {
      */
     private function showRoles($app = '') {
         // $app = $this->getQuery('app');
+
+        $noAtt = $this->getQuery('noatt');
         $modelRole = new Model_Roles();
-        $datas = $modelRole->getRoles($app);
+        // 用于不需要填充属性的请求
+        if (!empty($noAtt)) {
+            $datas = $modelRole->getRoles($app);
+            return jsonhelper::jsonOutput(true, $datas);
+        }
+        // 一次性取出数据和映射，避免多次查库，导致响应慢
+        $datas = $modelRole->getRolesWithMap($app);
         if (empty($datas)) {
             return jsonhelper::jsonOutput(true, array());
         }
 
-        $noAtt = $this->getQuery('noatt');
-        foreach ($datas as &$item) {
-            $isStatusOk = $item['r_status'] === 0;
-            $item['status'] = $isStatusOk ? '启用' : '<span class="must">禁用</span>';
-            $item['btnTxt'] = $isStatusOk ? '禁用' : '启用';
-            $item['add_time'] = date('Y-m-d H:i:s', $item['add_time']);
+        $ret = array();
+        foreach ($datas as $item) {
+            $id = $item['r_id'];
+            if (!isset($ret[$id])) {
+                $ret[$id] = $item;
+                $isStatusOk = $item['r_status'] === 0;
+                $ret[$id]['status'] = $isStatusOk ? '启用' : '<span class="must">禁用</span>';
+                $ret[$id]['btnTxt'] = $isStatusOk ? '禁用' : '启用';
+                $ret[$id]['add_time'] = date('Y-m-d H:i:s', $item['add_time']);
 
-            // 用于不需要填充属性的请求
-            if (!empty($noAtt)) {
-                continue;
+                $ret[$id]['users'] = array();
+                $ret[$id]['groups'] = array();
+                $ret[$id]['perms'] = array();
             }
-
-            $item['users'] = array();
-            $item['groups'] = array();
-            $arrData = $modelRole->getUsersAndGroupsByRid($item['r_id'], $app); // 角色下用户和用户组列表
-            foreach ($arrData as $att) {
-                if ($att['nametype'] === 0) {
-                    $item['users'][] = $att['name'];
-                } else {
-                    $item['groups'][] = $att['name'];
-                }
+            if (!empty($item['uname'])) {
+                $ret[$id]['users'][$item['uname']] = $item['uname'];
+            }
+            if (!empty($item['gname'])) {
+                $ret[$id]['groups'][$item['gname']] = $item['gname'];
+            }
+            if (!empty($item['pname'])) {
+                $ret[$id]['perms'][$item['pname']] = $item['pname'];
             }
         }
         unset($item);
-        return jsonhelper::jsonOutput(true, $datas);
+        unset($datas);
+        return jsonhelper::jsonOutput(true, array_values($ret));
     }
 
     /**
@@ -353,9 +437,101 @@ class Controller_Admin extends Controller_Base {
     }
 
     // </editor-fold>
+    //
+    // <editor-fold defaultstate="collapsed" desc="权限相关操作的私有方法">
+    /**
+     * 返回权限列表
+     * @param type $app
+     * @return type
+     */
+    private function showPerms($app = '') {
+        // $app = $this->getQuery('app');
+
+        $noAtt = $this->getQuery('noatt');
+        $model = new Model_Permissions();
+        // 用于不需要填充属性的请求
+        if (!empty($noAtt)) {
+            $datas = $model->getPerms($app);
+            return jsonhelper::jsonOutput(true, $datas);
+        }
+        // 一次性取出数据和映射，避免多次查库，导致响应慢
+        $datas = $model->getPermsWithMap($app);
+        if (empty($datas)) {
+            return jsonhelper::jsonOutput(true, array());
+        }
+
+        $ret = array();
+        foreach ($datas as $item) {
+            $id = $item['p_id'];
+            if (!isset($ret[$id])) {
+                $ret[$id] = $item;
+                $isStatusOk = $item['p_status'] === 0;
+                $ret[$id]['status'] = $isStatusOk ? '启用' : '<span class="must">禁用</span>';
+                $ret[$id]['btnTxt'] = $isStatusOk ? '禁用' : '启用';
+                $ret[$id]['add_time'] = date('Y-m-d H:i:s', $item['add_time']);
+
+                $ret[$id]['users'] = array();
+                $ret[$id]['groups'] = array();
+                $ret[$id]['roles'] = array();
+            }
+            if (!empty($item['uname'])) {
+                $ret[$id]['users'][$item['uname']] = $item['uname'];
+            }
+            if (!empty($item['gname'])) {
+                $ret[$id]['groups'][$item['gname']] = $item['gname'];
+            }
+            if (!empty($item['rname'])) {
+                $ret[$id]['roles'][$item['rname']] = $item['rname'];
+            }
+        }
+        unset($item);
+        unset($datas);
+        return jsonhelper::jsonOutput(true, array_values($ret));
+    }
 
     /**
-     * 设置用户、用户组与角色映射关系
+     * 禁用或启用权限
+     * @return type
+     */
+    private function disabledPerm() {
+        $model = new Model_Permissions();
+        $data = array();
+        $data['app'] = $this->getPost('app');
+        $data['p_id'] = $this->getPostInt('id');
+        $data['p_status'] = $this->getPostInt('status');
+        $data['lastip'] = httphelper::GetClientIP();
+        if ($data['p_id'] === 0) {
+            return jsonhelper::jsonOutput(false, 'not valid permission id');
+        }
+        $ret = $model->updatePerm($data);
+        jsonhelper::jsonOutput(true, $ret);
+    }
+
+    /**
+     * 新增或更新角色
+     */
+    private function addOrUpdatePerm() {
+        $model = new Model_Permissions();
+        $data = array();
+        $data['app'] = $this->getPost('app');
+        $data['p_id'] = $this->getPostInt('id');
+        $data['p_parentid'] = $this->getPostInt('pid');
+        $data['p_desc'] = $this->getPost('desc');
+        $data['p_val'] = $this->getPost('name');
+        $data['p_status'] = $this->getPostInt('status');
+        $data['lastip'] = httphelper::GetClientIP();
+        if ($data['p_id'] === 0) {
+            $ret = $model->addPerm($data);
+        } else {
+            $ret = $model->updatePerm($data);
+        }
+        jsonhelper::jsonOutput(true, $ret);
+    }
+
+    // </editor-fold>
+
+    /**
+     * 设置用户、用户组与角色映射关系的统一方法
      * @return type
      */
     private function mapEdit($type) {
@@ -409,6 +585,18 @@ class Controller_Admin extends Controller_Base {
                 // 用户组与角色的映射
                 $modelMap = new Model_MapGroupRole();
                 $keyField = 'g_id';
+                $valField = 'r_id';
+                break;
+            case 'roleperm':
+                // 权限与角色的映射
+                $modelMap = new Model_MapRolePerm();
+                $keyField = 'r_id';
+                $valField = 'p_id';
+                break;
+            case 'permrole':
+                // 权限与角色的映射
+                $modelMap = new Model_MapRolePerm();
+                $keyField = 'p_id';
                 $valField = 'r_id';
                 break;
             default :

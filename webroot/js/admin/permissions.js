@@ -1,11 +1,12 @@
 
-var apiurl = '../../admin/users';
+var apiurl = '../../admin/permissions';
 var dialogCtlId = '#editDialog';
 // 避免网络导致，导致用户多次点击多次请求数据
 var isNeting = false;
-// 所有的角色和用户组数据，用于给用户绑定设置使用
+// 所有的角色数据，用于给权限绑定设置使用
 var arrRoles = [];
-var arrGroups = [];
+// 所有的权限数据，用于给权限绑定上级使用
+var arrPerms = [];
 $(document).ready(function () {
     loadLists();
 
@@ -15,25 +16,21 @@ $(document).ready(function () {
     // 解决multiselect被浮层遮挡的bug
     $('.ui-multiselect-menu').css('z-index', 1000);
 
-    loadRolesAndGroups();
+    loadRoles();
 });
 
 /**
- * 加载所有的角色列表和用户组列表，供用户绑定
+ * 加载所有的角色列表，供权限绑定
  */
-function loadRolesAndGroups() {
+function loadRoles() {
     var url = '../../admin/roles?noatt=1';
     ajaxLoadData(url, function (ret) {
         window.arrRoles = ret;
     });
-    url = '../../admin/groups?noatt=1';
-    ajaxLoadData(url, function (ret) {
-        window.arrGroups = ret;
-    });
 }
 
 /**
- * 获取用户列表
+ * 获取列表
  */
 function loadLists() {
     var tbId = '#tabData';
@@ -55,6 +52,7 @@ function loadLists() {
                 $('#trNoData').show();
                 return;
             }
+            window.arrPerms = response.result;
             var html = window.render('tplRow', response.result);
             $(tbId).append(html);
 
@@ -65,20 +63,20 @@ function loadLists() {
 
 
 /**
- * 禁用指定用户
+ * 禁用指定角色
  * @param {jquery} obj 点击对象
  * @return {undefined}
  */
 function disableItem(obj) {
     var tr = $(obj).parents('tr:eq(0)');
-    var account = $.trim(tr.find('td:eq(1)').text());
+    var name = $.trim(tr.find('td:eq(2)').text());
     var btnTxt = $(obj).text().replace(/[\[\]]/g, '');
-    if (!confirm('确认要' + btnTxt + '：' + account + '吗？')) {
+    if (!confirm('确认要' + btnTxt + '：' + name + '吗？')) {
         return;
     }
     var para = {};
     para.id = $.trim(tr.find('td:eq(0)').text());
-    var status = tr.find('td:eq(3)').attr('data');
+    var status = tr.find('td:eq(4)').attr('data');
     para.status = status === '1' ? 0 : 1;
     $.post(apiurl + '?flg=disable', para, function (response) {
         if (response.code !== 200) {
@@ -95,7 +93,7 @@ function disableItem(obj) {
 }
 
 /**
- * 新增或修改用户
+ * 新增或修改
  * @param {jquery} obj 点击对象，为空表示新增，不为空表示编辑
  * @return {undefined}
  */
@@ -103,21 +101,35 @@ function editItem(obj) {
     $(dialogCtlId).html($('#tplItemInfo').html());
     // 获取当前
     var edittxt;
+    var pid = '';
     if (!obj) {
         // 新增
-        edittxt = '新增用户';
+        edittxt = '新增权限';
         $('#divId').hide();
         $('#txtUid').val('');
     } else {
         // 编辑，从当前行获取要编辑的数据
-        edittxt = '编辑用户';
+        edittxt = '编辑权限';
         var tr = $(obj).parents('tr:eq(0)');
         $('#txtUid').val($.trim(tr.find('td:eq(0)').text()));
-        $('#txtAccount').val($.trim(tr.find('td:eq(1)').text()));
         $('#txtName').val($.trim(tr.find('td:eq(2)').text()));
-        var status = tr.find('td:eq(3)').attr('data');
+        $('#txtDesc').val($.trim(tr.find('td:eq(3)').text()));
+        var status = tr.find('td:eq(4)').attr('data');
         $('input[name="chkstatus"][value="' + status + '"]').prop('checked', 'checked');
+        pid = $.trim(tr.find('td:eq(1)').text());
     }
+
+    // 绑定上级权限列表
+    for (var idx = 0, roleCnt = window.arrPerms.length; idx < roleCnt; idx++) {
+        var item = window.arrPerms[idx];
+        if (item['p_status'] !== 0 || item['p_parentid'] !== 0 || item['p_id'].toString() === $('#txtUid').val()) {
+            continue;
+        }
+        var selected = item['p_id'].toString() === pid ? 'selected' : '';
+        var html = '<option value="' + item['p_id'] + '" ' + selected + '>' + item['p_desc'] + '</option>';
+        $('#lstParent').append(html);
+    }
+
     $(dialogCtlId).dialog('option', 'title', edittxt);
     window.showDialog(dialogCtlId);
 }
@@ -129,7 +141,7 @@ function editItem(obj) {
  */
 function saveitem() {
     if ($('#hidType').length > 0) {
-        return saveRoleOrGroup();
+        return saveRoles();
     }
     var para = getParams();
     if (!para) {
@@ -163,17 +175,13 @@ function saveitem() {
 function getParams() {
     var para = {};
     para.id = $('#txtUid').val();
-    para.account = $.trim($('#txtAccount').val());
-    if (para.account.length <= 0) {
-        alert('账号不能为空');
-        return false;
-    }
-
+    para.desc = $.trim($('#txtDesc').val());
     para.name = $.trim($('#txtName').val());
     if (para.name.length <= 0) {
-        alert('名称不能为空');
+        alert('权限值不能为空');
         return false;
     }
+    para.pid = $('#lstParent').val();
 
     var radStatus = $('input[name="chkstatus"]:checked');
     if (radStatus.length !== 1) {
@@ -185,36 +193,22 @@ function getParams() {
 }
 
 /**
- * 编辑用户所属角色或分组
+ * 编辑有权限的角色
  * @param {type} obj 点击对象
  */
-function editRoleOrGroup(obj) {
-    var isRole = $(obj).text().indexOf('角色') >= 0;
-
+function editRoles(obj) {
     $(dialogCtlId).html($('#tplItemAtt').html());
-    $('#hidType').val(isRole ? '1' : '0');
-
     var tr = $(obj).parents('tr:eq(0)');
     $('#txtUid').val($.trim(tr.find('td:eq(0)').text()));
-    if (isRole) {
-        var target = $('#lstRoles');
-        var data = window.arrRoles;
-        var edittxt = '所属角色编辑...';
-        var attId = 'r_id';
-        var attName = 'r_name';
-        var attStatus = 'r_status';
-        var oldVal = ' ' + $.trim(tr.find('td:eq(5)').text());
-    } else {
-        var target = $('#lstGroups');
-        var data = window.arrGroups;
-        var edittxt = '所属用户组编辑...';
-        var attId = 'g_id';
-        var attName = 'g_name';
-        var attStatus = 'g_status';
-        var oldVal = ' ' + $.trim(tr.find('td:eq(4)').text());
-    }
-    // 列表的2级父对象显示
-    target.parent().parent().show();
+
+    var target = $('#lstRoles');
+    var data = window.arrRoles;
+    var edittxt = '有权限的角色编辑...';
+    var attId = 'r_id';
+    var attName = 'r_name';
+    var attStatus = 'r_status';
+    var oldVal = ' ' + $.trim(tr.find('td:eq(5)').text());
+
     // 设置属性，用于防止无数据提交
     target.attr('oldVal', oldVal);
     for (var i = 0, j = data.length; i < j; i++) {
@@ -242,12 +236,10 @@ function editRoleOrGroup(obj) {
 }
 
 /**
- * 保存用户所属角色或分组
- * @param {type} obj 点击对象
+ * 保存角色所属用户或分组
  */
-function saveRoleOrGroup() {
-    var isRole = $('#hidType').val() === '1';
-    var target = isRole ? $('#lstRoles') : $('#lstGroups');
+function saveRoles() {
+    var target = $('#lstRoles');
     var para = {};
     para.id = $('#txtUid').val();
     var selectOptions = target.val();
@@ -265,8 +257,7 @@ function saveRoleOrGroup() {
         return;
     }
     isNeting = true;
-    var flg = isRole ? 'role' : 'group';
-    $.post(apiurl + '?flg=' + flg, para, function (response) {
+    $.post(apiurl + '?flg=permrole', para, function (response) {
         isNeting = false;
         if (response.code !== 200) {
             alert('失败 ' + (response.message ? response.message : ''));

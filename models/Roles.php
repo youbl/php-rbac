@@ -2,9 +2,43 @@
 
 class Model_Roles extends Model_Base {
 
+    /**
+     * 返回指定应用的所有角色
+     * @param type $app
+     * @return type
+     */
     public function getRoles($app = '') {
         $sql = 'SELECT ro.* FROM b_roles ro WHERE ro.`app`=?';
         $params = array($app);
+        return $this->db->executeSql($sql, $params);
+    }
+
+    /**
+     * 返回指定应用的所有角色,带map映射关系
+     * @param type $app
+     * @return type
+     */
+    public function getRolesWithMap($app = '') {
+        // 角色与权限的映射关系
+        $sql0 = 'SELECT mrp.r_id, pe.p_desc, pe.p_id FROM b_permissions pe, map_role_perm mrp
+            WHERE pe.p_id=mrp.p_id AND mrp.map_status=0 AND pe.app=?';
+        // 角色与用户的映射关系
+        $sql1 = 'SELECT mur.r_id,us.u_id,us.u_name FROM map_user_role mur, b_users us
+            WHERE us.u_id=mur.u_id AND us.u_status=0 AND mur.map_status=0 AND us.app=?';
+        // 角色与用户组的映射关系
+        $sql2 = 'SELECT mgr.r_id,gr.g_id,gr.g_name FROM map_group_role mgr, b_groups gr
+            WHERE gr.g_id=mgr.g_id AND gr.g_status=0 AND mgr.map_status=0 AND gr.app=?';
+
+        $sql = 'SELECT ro.*,
+                CONCAT(sub0.p_id, \':\',sub0.p_desc) pname,
+                CONCAT(sub1.u_id, \':\',sub1.u_name) uname,
+                CONCAT(sub2.g_id, \':\',sub2.g_name) gname
+             FROM b_roles ro
+            LEFT JOIN (' . $sql0 . ') sub0 ON ro.r_id=sub0.r_id
+            LEFT JOIN (' . $sql1 . ') sub1 ON ro.r_id=sub1.r_id
+            LEFT JOIN (' . $sql2 . ') sub2 ON ro.r_id=sub2.r_id
+            WHERE ro.`app`=?';
+        $params = array($app, $app, $app, $app);
         return $this->db->executeSql($sql, $params);
     }
 

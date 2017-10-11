@@ -3,34 +3,6 @@
 $(document).ready(function () {
     loadAllMenu();
 
-    // Store variables
-    var accordion_head = $('.accordion > li > a');
-    var accordion_body = $('.accordion li > .sub-menu');
-    var accordion_tag = $('.accordion li > .sub-menu li');
-
-    // Open the first tab on load
-    accordion_head.first().addClass('active').next().slideDown('normal');
-
-    // tab Click function
-    accordion_head.on('click', function (event) {
-        // Disable header links
-        event.preventDefault();
-        if ($(this).attr('class') !== 'active') {
-            // hide all tabs
-            accordion_body.slideUp('normal');
-            accordion_head.removeClass('active');
-            // show current tab
-            $(this).next().stop(true, true).slideToggle('normal');
-            $(this).addClass('active');
-        }
-    });
-
-    // focus tab item
-    accordion_tag.on('click', function (event) {
-        accordion_tag.removeClass('active-tag');
-        $(this).addClass('active-tag');
-    });
-
     /**
      * bind menus
      */
@@ -58,18 +30,52 @@ $(document).ready(function () {
                     var href = item['p_val'] ? item['p_val'] : 'javascript:void(0)';
                     if (parentid === 0) {
                         var html = '<li id="menuBase'
-                                + item['p_id'] + '"><a href="'
-                                + href + '"><i class="icon20_index"></i>'
+                                + item['p_id'] + '"><a  href="'
+                                + href + '" target="right"><i class="icon20_index"></i>'
                                 + item['p_desc'] + '<span></span></a><ul class="sub-menu"></ul></li>';
                         tree.append(html);
                     } else {
                         var html = '<li class="sub-menu-li"><a href="'
                                 + href + '" target="right">'
                                 + item['p_desc'] + '</a></li>';
-                        tree.find('#menuBase ul' + parentid).append(html);
+                        tree.find('#menuBase' + parentid + ' ul').append(html);
                     }
                 }
+                initAllMenu();
             }
+        });
+    }
+
+    /**
+     * bind menus
+     */
+    function initAllMenu() {
+        // Store variables
+        var accordion_head = $('.accordion > li > a');
+        var accordion_body = $('.accordion li > .sub-menu');
+        var accordion_tag = $('.accordion li > .sub-menu li');
+
+        // Open the first tab on load
+        accordion_head.first().addClass('active').next().slideDown('normal');
+
+        // tab Click function
+        accordion_head.on('click', function (event) {
+            // Disable header links
+            // event.preventDefault(); // 如果希望一级菜单href不生效，取消本行注释
+            if ($(this).attr('class') !== 'active') {
+                // hide all tabs
+                accordion_body.slideUp('normal');
+                accordion_head.removeClass('active');
+                // show current tab
+                $(this).next().stop(true, true).slideToggle('normal');
+                $(this).addClass('active');
+            }
+        });
+
+        // focus tab item
+        accordion_tag.on('click', function (event) {
+            accordion_tag.removeClass('active-tag');
+            $(this).addClass('active-tag');
         });
     }
 });

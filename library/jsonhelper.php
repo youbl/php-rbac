@@ -12,9 +12,10 @@ final class jsonhelper {
      * 输出json格式的数据
      * @param type $success true或200，表示返回成功，其它值表示失败
      * @param type $data 成功或失败的响应数据
+     * @param type $ext 成功时的其它响应数据
      * @return null
      */
-    public static function jsonOutput($success, $data) {
+    public static function jsonOutput($success, $data, $ext = null) {
         header('application/json;charset=utf-8');
         header("Cache-Control:no-cache");           // 禁止缓存
 
@@ -22,6 +23,9 @@ final class jsonhelper {
         if ($success === true || $success === 200) {
             $result['code'] = 200;
             $result['result'] = $data;
+            if (isset($ext)) {
+                $result['ext'] = $ext;
+            }
         } else {
             $result['code'] = $success;
             $result['message'] = $data;
