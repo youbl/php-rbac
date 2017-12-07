@@ -1,4 +1,4 @@
-可以按照以下步骤来部署和运行程序:
+﻿可以按照以下步骤来部署和运行程序:
 1.请确保机器 已经安装了Yaf框架, 并且已经加载入PHP;
 2.把sample目录Copy到Webserver的DocumentRoot目录下;
 3.需要在php.ini里面启用如下配置，生产的代码才能正确运行：
@@ -15,3 +15,26 @@
    那么在模板文件找不到时，不会渲染，也不会报任何错误的
 3、所有的目录名必须小写，所有的html模板名也必须小写，php无所谓
    否则会出现文件找不到，如果是模板，则参考第2点，不报任何错误啊啊啊
+
+
+NGINX配置：
+1、nginx.conf 增加如下配置，可以在error_log看到url路由结果：
+    http {
+        rewrite_log on;
+2、rewrite 配置参考：
+server {
+    location ~ ^/(favicon.ico|static) {
+        root            /home/work/odp/webroot;
+    }
+
+    location ~ \.(js|css|gif|jpg|jpeg|png|ico|swf|ttf|woff|woff2|eot|otf|svg|html?)$ {
+        root            /home/work/odp/webroot;
+    }
+    location / {
+        root /home/work/odp/webroot;
+        index index.php;
+        fastcgi_pass    $php_upstream;
+        include         fastcgi.conf;
+
+        rewrite ^(/.*)?$  /index.php$1 break;
+    }
